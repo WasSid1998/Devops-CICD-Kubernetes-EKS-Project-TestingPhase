@@ -1,0 +1,131 @@
+pipeline {
+  agent any
+
+  environment {
+    AWS_REGION = "us-east-1"
+    ACCOUNT_ID = "<YOUR_AWS_ACCOUNT_ID>"
+    APP_NAME   = "pythonapp"
+    IMAGE_TAG  = "${BUILD_NUMBER}-${GIT_COMMIT.take(7)}"
+    ECR_REPO   = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
+  }
+
+  stages {
+
+    stage("Build & Test") {
+      steps {
+        sh """
+          pip install -r app/requirements.txt
+          python -m pytest app/tests/ -v || true
+
+          docker build -t ${APP_NAME}:${IMAGE_TAG} app/
+        """
+      }
+    }
+
+    stage("Push Image") {
+      steps {
+        sh """
+          aws ecr get-login-password --region ${AWS_REGION} | \
+          docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+          docker tag ${APP_NAME}:${IMAGE_TAG} ${ECR_REPO}:${IMAGE_TAG}
+          docker push ${ECR_REPO}:${IMAGE_TAG}
+        """
+      }
+    }
+
+    stage("Deploy DEV") {
+      steps {
+        sh """
+          aws eks update-kubeconfig --region ${AWS_REGION} --name ${APP_NAME}-dev
+
+          kubectl apply -k k8s/overlays/dev/
+
+          kubectl set image deployment/python-app \
+          python-app=${ECR_REPO}:${IMAGE_TAG}
+
+          kubectl rollout status deployment/python-app --timeout=3m
+        """
+      }
+    }
+
+    stage("Smoke Test DEV") {
+      steps {
+        sh """
+          sleep 15
+          curl -sf https://dev.pythonapp.com/health
+        """
+      }
+    }
+
+    stage("Approve PREPROD") {
+      steps {
+        input message: "Deploy to PREPROD?"
+      }
+    }
+
+    stage("Deploy PREPROD") {
+      steps {
+        sh """
+          aws eks update-kubeconfig --region ${AWS_REGION} --name ${APP_NAME}-preprod
+
+          kubectl apply -k k8s/overlays/preprod/
+
+          kubectl set image deployment/python-app \
+          python-app=${ECR_REPO}:${IMAGE_TAG}
+
+          kubectl rollout status deployment/python-app --timeout=3m
+        """
+      }
+    }
+
+    stage("Approve PROD") {
+      steps {
+        input message: "Deploy to PROD?"
+      }
+    }
+
+    stage("Deploy PROD") {
+      steps {
+        sh """
+          aws eks update-kubeconfig --region ${AWS_REGION} --name ${APP_NAME}-prod
+
+          kubectl apply -k k8s/overlays/prod/
+
+          kubectl set image deployment/python-app \
+          python-app=${ECR_REPO}:${IMAGE_TAG}
+
+          kubectl rollout status deployment/python-app --timeout=5m
+        """
+      }
+    }
+
+    stage("Verify PROD") {
+      steps {
+        sh """
+          sleep 20
+          curl -sf https://pythonapp.com/health
+        """
+      }
+    }
+  }
+
+  post {
+    failure {
+      echo "Deployment failed. Rolling back..."
+
+      sh """
+        aws eks update-kubeconfig --region ${AWS_REGION} --name ${APP_NAME}-prod || true
+        kubectl rollout undo deployment/python-app || true
+      """
+    }
+
+    always {
+      sh "docker rmi ${APP_NAME}:${IMAGE_TAG} || true"
+    }
+
+    success {
+      echo "Deployment successful!"
+    }
+  }
+}

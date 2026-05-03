@@ -1,0 +1,10 @@
+project = "pythonapp"
+env = "prod"
+node_size = "t3.large"
+min_nodes = 3
+max_nodes = 10
+multi_az = true
+backup_days = 14
+deletion_protection = true
+domain_name = "pythonapp.com"
+alert_email = "prod-team@mycompany.com"

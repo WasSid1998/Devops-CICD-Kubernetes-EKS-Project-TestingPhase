@@ -1,0 +1,10 @@
+project = "myapp"
+env = "preprod"
+node_size = "t3.medium"
+min_nodes = 2
+max_nodes = 4
+multi_az = false
+backup_days = 3
+deletion_protection = false
+domain_name = "qa.myapp.com"
+alert_email = "qa-team@mycompany.com"

@@ -1,0 +1,11 @@
+project = "pythonapp"
+env = "dev"
+node_size = "t3.small"
+min_nodes = 1
+max_nodes = 2
+multi_az = false
+backup_days = 1
+deletion_protection = false
+domain_name = "dev.pythonapp.com"
+alert_email = "dev-team@mycompany.com"
+your_ip = "Your Public IP"
