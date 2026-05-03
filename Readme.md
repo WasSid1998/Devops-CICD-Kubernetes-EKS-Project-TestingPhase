@@ -4,6 +4,8 @@ PYTHON APP CI/CD – PRODUCTION ARCHITECTURE
 
 We have implemented a complete CI/CD pipeline for a Python application deployed on AWS using Terraform, Kubernetes (EKS), Jenkins, and supporting AWS services.  
 
+Please note: This is still in testig process
+
 High-Level Architecture Flow  
 
 The request flow is as follows:  
